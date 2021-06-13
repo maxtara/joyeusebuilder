@@ -1,0 +1,7 @@
+---
+# defaults file for joyeuse
+publish_scp_uri: 'root@192.168.1.1:/var/www/html/output/'
+publish_http_url: 'https://update.domain.com/output/'
+user_name: ubuntu
+my_email: you@gmail.com
+my_name: name

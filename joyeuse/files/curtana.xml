@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+    <remote  name="gitlab" fetch="https://gitlab.com/" />
+    <!--Device Trees-->
+    <project path="device/xiaomi/curtana" name="maxtara/android_device_xiaomi_curtana-unified" remote="github" revision="main" />
+    <!-- Kernel source -->
+    <project path="kernel/xiaomi/sm6250" name="maxtara/android_kernel_xiaomi_sm6250" remote="github" revision="lineage-17.1" />
+    <!-- Vendor tree -->
+    <project path="vendor/xiaomi" name="maxtara/proprietary_vendor_xiaomi" remote="gitlab" revision="lineage-17.1" />
+    <!-- Media and audio HALs -->
+    <project path="hardware/qcom-caf/sm8150/media" name="xiaomi-sm6250-devs/android_hardware_qcom_media" remote="github" revision="lineage-17.1-caf-sm8150" />
+    <project path="hardware/qcom-caf/sm8150/audio" name="xiaomi-sm6250-devs/android_hardware_qcom_audio" remote="github" revision="lineage-17.1-caf-sm8150" />
+    <!-- Updater.  NOT doing this, the default one is fine. Only customisation is changelog url -->
+    <!-- <project path="packages/apps/Updater" name="LeddaZ/android_packages_apps_Updater" remote="github" revision="lineage-17.1" /> -->
+</manifest>

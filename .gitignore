@@ -1,0 +1,3 @@
+ansible.log
+inventory/default.yml
+inventory/group_vars/all.yml

@@ -1,0 +1,148 @@
+---
+# tasks file for joyeuse
+
+- name: Create Folders
+  file: 
+    path: "{{ ansible_env.HOME }}/{{ item }}"
+    owner: "{{ user_name }}" 
+    group:  "{{ user_name }}"  
+    mode: 0755 
+    state: directory
+  with_items: ['bin', 'android/lineage']
+
+- name: Download repo
+  get_url:
+    url: https://storage.googleapis.com/git-repo-downloads/repo
+    dest: "{{ ansible_env.HOME }}/bin/repo"
+
+- name: Download android tools
+  get_url:
+    url: https://dl.google.com/android/repository/platform-tools-latest-linux.zip
+    dest: "/tmp/platform-tools-latest-linux.zip"
+
+- name: Extract android tools
+  ansible.builtin.unarchive:
+    remote_src: yes 
+    src: "/tmp/platform-tools-latest-linux.zip"
+    dest: "{{ ansible_env.HOME }}"
+
+- name: Ensure android tools in in your bashrc. Added lots of cache/memory options to work with low ram (12GB ish is all i can spare)
+  blockinfile:
+    dest: "{{ ansible_env.HOME }}/.bashrc"
+    block: |
+      # set PATH so it includes user's private bin if it exists
+      if [ -d "$HOME/bin" ] ; then
+                  PATH="$HOME/bin:$PATH"
+      fi
+      # add Android SDK platform tools to path
+      if [ -d "$HOME/platform-tools" ] ; then
+                  PATH="$HOME/platform-tools:$PATH"
+      fi
+      # Cache settings
+      export USE_CCACHE=1
+      export CCACHE_EXEC=/usr/bin/ccache
+      ccache -o compression=true
+      export ANDROID_JACK_VM_ARGS="-Dfile.encoding=UTF-8 -XX:+TieredCompilation -Xmx4G"
+      export _JAVA_OPTIONS="-Xmx4G"
+    marker: '# {mark} ANSIBLE MANAGED BLOCK - android'
+    insertbefore: BOF
+    create: yes 
+
+- name: Configure Repo and git
+  shell: |
+    set -ex
+    chmod 755 {{ ansible_env.HOME }}/bin/repo
+    sudo ln -sn /usr/bin/python3 /usr/bin/python | true
+    git config --global user.email "{{ my_email }}"
+    git config --global user.name "{{ my_name}}"
+
+- name: Init LineageOS, then sync default lineage.  This takes a very long time the first, and a long time from then onwards. 
+  shell: |
+    set -ex
+    cd {{ ansible_env.HOME }}/android/lineage
+    {{ ansible_env.HOME }}/bin/repo init -u https://github.com/LineageOS/android.git -b lineage-17.1
+    {{ ansible_env.HOME }}/bin/repo sync
+  async: 1000000
+  poll: 10
+  args:
+    executable: /bin/bash
+
+- name: Copy curtana specific file
+  copy:
+    src: curtana.xml
+    dest: "{{ ansible_env.HOME }}/android/lineage/.repo/local_manifests/"
+
+- name: Changes to base lineageOS. Comment out a few things. These trees have been replaced by entries in curtana.xml (previous step)
+  shell: |
+    set -ex
+    sed -i '/hardware\/qcom-caf\/sm8150\/media/c\<!-- -->' {{ ansible_env.HOME }}/android/lineage/.repo/manifests/snippets/lineage.xml
+    sed -i '/hardware\/qcom-caf\/sm8150\/audio/c\<!-- -->' {{ ansible_env.HOME }}/android/lineage/.repo/manifests/snippets/lineage.xml
+
+- name: Sync lineageOS. This takes a very long time the first, and a long time from then onwards. 
+  shell: |
+    set -ex
+    cd {{ ansible_env.HOME }}/android/lineage
+    # Delete old version
+    rm -rf out/ 
+    # Re-sync
+    {{ ansible_env.HOME }}/bin/repo sync --force-sync --fail-fast --force-remove-dirty --retry-fetches=3 --prune
+  async: 1000000
+  poll: 10
+  args:
+    executable: /bin/bash
+
+- name: Build rom. This takes a long time - at least a few hours
+  shell: |
+    set -ex
+    cd {{ ansible_env.HOME }}
+    export ANDROID_JACK_VM_ARGS="-Dfile.encoding=UTF-8 -XX:+TieredCompilation -Xmx4G"
+    export _JAVA_OPTIONS="-Xmx4G"
+    source .bashrc
+    cd android/lineage/
+    source build/envsetup.sh
+    lunch lineage_curtana-userdebug
+    mka bacon -j2
+  async: 1000000 
+  args:
+    executable: /bin/bash
+  poll: 10
+
+
+- name: Publish rom
+  shell: |
+    set -ex
+    cd {{ ansible_env.HOME }}/android/lineage/out/target/product/curtana/
+    export NEWFILE=`ls -t lineage-17*.zip | head -1`
+    export NEWFILEMD5=`ls -t lineage-17*.zip.md5sum | head -1`
+    export NEWFILEMD5=`cat $NEWFILEMD5 | cut -d " " -f 1`
+    export NEWFILESIZE=$(stat -c%s "$NEWFILE")
+    cd  ~/android/lineage/
+    export NEWFILEDATE=`cat out/build_date.txt`
+    # Create new publish file
+    cat <<EOF >lc.json
+    {
+        "response": [
+            {
+                "datetime": $NEWFILEDATE,
+                "filename": "$NEWFILE",
+                "id": "$NEWFILEMD5",
+                "romtype": "unofficial",
+                "size": $NEWFILESIZE,
+                "url": "{{ publish_http_url }}$NEWFILE",
+                "version": "17.1"
+            }
+        ]
+    }
+    EOF
+
+    # Publish image
+    scp out/target/product/curtana/$NEWFILE {{ publish_scp_uri }}
+
+    # Update metadata
+    scp lc.json {{ publish_scp_uri }}
+
+  async: 10000 
+  args:
+    executable: /bin/bash
+  poll: 10
+

@@ -1,0 +1,9 @@
+ansible_ssh_common_args: '-o ProxyCommand="ssh -W %h:%p -q root@192.168.1.1"'
+user_name: name
+my_email: name@gmail.com
+my_name: name
+host_ip: 192.168.1.1
+jump_host: 192.168.1.1
+publish_scp_uri: 'root@192.168.1.1:/var/www/html/output/'
+publish_http_url: 'https://android.domain.com/local/output/'
+vm_name: 'vm'
